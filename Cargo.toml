@@ -1,0 +1,6 @@
+[package]
+name = "papyrus"
+version = "0.1.0"
+authors = ["Peter Coleman <peter.coleman143@gmail.com>"]
+
+[dependencies]
