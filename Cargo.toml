@@ -5,7 +5,3 @@ authors = ["Peter Coleman <peter.coleman143@gmail.com>"]
 
 [dependencies]
 csv = "1"
-scoped_threadpool = "0.1.9"
-num_cpus = "1.8.0"
-elapsed = "0.1"
-smallvec = "0.6.6"
