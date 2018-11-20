@@ -2,6 +2,7 @@
 extern crate csv;
 extern crate num_cpus;
 extern crate scoped_threadpool;
+extern crate elapsed;
 
 use std::io::{self, BufReader};
 use std::io::prelude::*;
@@ -16,6 +17,7 @@ use std::cmp;
 use std::str;
 use std::process;
 use scoped_threadpool::Pool;
+use elapsed::measure_time;
 
 #[derive(Debug)]
  struct Verse {
@@ -40,6 +42,56 @@ use scoped_threadpool::Pool;
  }
 
 fn main() -> io::Result<()> {
+    let verses = match load_verses() {
+        Ok(verses) => verses,
+        Err(e) => process::exit(1)
+    };
+
+    // Prepare the thread pool with n threads where n is the number of logical cores
+    let mut pool = Pool::new(1 as u32);
+
+    loop {
+        // 1. Ask for each string
+        println!("\nSearch verses: ");
+
+        // 2. Read input
+        let mut search = String::new();
+        io::stdin().read_line(&mut search)
+            .expect("Failed to read line");
+
+        // 3. Remove new line char and break search into chars
+        let search = search.trim().to_lowercase();
+
+        // 5. If no input was given exit the program
+        if search.chars().count() == 0  {
+            process::exit(1);
+        }
+
+        let (elapsed, sum) = measure_time(|| {
+            let mut jobs = make_jobs(search, &verses, &pool);
+
+            pool.scoped(|scope| {
+                for job in &mut jobs {
+                    scope.execute(move || {
+                        process_job(job)
+                    });
+                }
+            });
+
+            let top_matches = top_job_matches(jobs, 10);
+
+            for top_match in top_matches {
+                println!("{:?}\n", top_match);
+            }
+        });
+
+        println!("{:?}\n", elapsed);
+
+        // 7. top return verse location
+    }
+}
+
+fn load_verses() -> Result<Vec<Verse>, csv::Error> {
     let mut rdr = Reader::from_path("src/data/t_asv.csv")?;
     let headers = rdr.headers()?.clone();
 
@@ -84,100 +136,86 @@ fn main() -> io::Result<()> {
         };
 
         verses.push(
-            Verse { book, chapter, verse, text: text.to_string().trim().to_string() }
+            Verse { book, chapter, verse, text: text.to_string().to_lowercase().trim().to_string() }
         );
     }
 
-    // Prepare the thread pool with n threads where n is the number of logical cores
-    let mut pool = Pool::new(num_cpus::get() as u32);
+    Ok(verses)
+}
 
-    loop {
-        // 1. Ask for each string
-        println!("\nSearch verses: ");
-
-        // 2. Read input
-        let mut search = String::new();
-        io::stdin().read_line(&mut search)
-            .expect("Failed to read line");
-
-        // 3. Remove new line char and break search into chars
-        let search = search.trim().to_lowercase();
-
-        // 5. If no input was given exit the program
-        if search.chars().count() == 0  {
-            process::exit(1);
-        }
-
-        // calculate the size of each chunk of work we will give to each thread in the pool
+fn make_jobs<'b>(search: String, verses: &'b Vec<Verse>, pool: &Pool) -> Vec<Job<'b>> {
+    // calculate the size of each chunk of work we will give to each thread in the pool
         let verse_chunk_size = ((verses.len() as f32) / (pool.thread_count() as f32)).ceil() as u16;
 
         // Create a job for each thread
-        let mut jobs: Vec<Job> = verses
-            .chunks_mut(verse_chunk_size as usize)
+        return verses
+            .chunks(verse_chunk_size as usize)
             .map(|chunk| Job {
                 chunk,
                 matches: Vec::new(),
                 search: search.clone()
             })
             .collect();
+}
 
-        pool.scoped(|scope| {
-            for job in &mut jobs {
-                scope.execute(move || {
-                    // 6. loop through each verse and find best matches
-                    'outer: for verse in job.chunk {
-                        let verse_text = verse.text.to_lowercase();
-                        let mut matched_indexes: Vec<u16> = Vec::new();
-                        let mut verse_chars = verse_text.chars().enumerate();
+fn process_job(job: &mut Job) {
+    // 6. loop through each verse and find best matches
+    'outer: for verse in job.chunk {
+        let mut matched_indexes: Vec<u16> = Vec::new();
+        let mut verse_chars = verse.text.chars().enumerate();
 
-                        for search_char in job.search.chars() {
-                            match verse_chars.find(|(i, verse_ch)| *verse_ch == search_char) {
-                                Some((i, verse_ch)) => matched_indexes.push(i as u16),
-                                None => continue 'outer
-                            }
-                        }
-
-                        // Find the distance between each index
-                        let total_distance: u16 = matched_indexes
-                            .iter()
-                            .take(matched_indexes.len() - 1)
-                            .zip(matched_indexes.iter().skip(1))
-                            .fold(0, |sum, (a, b)| sum + (b - a) - 1);
-
-                        let score: u16 = (job.search.chars().count() as u16) - (matched_indexes.len() as u16) + total_distance;
-
-                        // Only store the match a better match than the current worst match
-                        if let Some(lower_bound_match) = job.matches.last() {
-                            if (lower_bound_match.score < score) {
-                                continue;
-                            }
-                        }
-                        
-                        job.matches.push(Match { 
-                            verse: verse,
-                            score,
-                            matched_indexes
-                        });
-
-                        job.matches.sort_unstable_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
-                        job.matches.truncate(10);
-                    }
-                });
+        for search_char in job.search.chars() {
+            match verse_chars.find(|(i, verse_ch)| *verse_ch == search_char) {
+                Some((i, verse_ch)) => matched_indexes.push(i as u16),
+                None => continue 'outer
             }
-        });
-
-        let mut top_matches: Vec<Match> = jobs
-            .into_iter()
-            .flat_map(|job| job.matches)
-            .collect();
-
-        top_matches.sort_unstable_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
-        top_matches.truncate(10);
-
-        for top_match in top_matches {
-            println!("{:?}\n", top_match);
         }
 
-        // 7. top return verse location
+        let score: u16 = match score(&matched_indexes) {
+            Ok(score) => score,
+            Err(e) => continue
+        };
+
+        // Only store the match a better match than the current worst match
+        if let Some(lower_bound_match) = job.matches.last() {
+            if (lower_bound_match.score < score) {
+                continue;
+            }
+        }
+        
+        job.matches.push(Match { 
+            verse: verse,
+            score,
+            matched_indexes
+        });
+
+        job.matches.sort_unstable_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+        job.matches.truncate(10);
     }
+}
+
+fn top_job_matches<'a>(jobs: Vec<Job<'a>>, limit: u8) -> Vec<Match<'a>> {
+    let mut top_matches: Vec<Match> = jobs
+        .into_iter()
+        .flat_map(|job| job.matches)
+        .collect();
+
+    top_matches.sort_unstable_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+    top_matches.truncate(limit as usize);
+
+    top_matches
+}
+
+fn score(matched_indexes: &Vec<u16>) -> Result<u16, &'static str> {
+    let first_index = match matched_indexes.first() {
+        Some(index) => index,
+        None => return Err("must contain at least one index")
+    };
+
+    let last_index = match matched_indexes.last() {
+        Some(index) => index,
+        None => return Err("must contain at least one index")
+    };
+
+    Ok(last_index - first_index)
 }
