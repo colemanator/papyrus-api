@@ -1,5 +1,7 @@
 #![allow(unused)]
 extern crate csv;
+extern crate unicode_normalization;
+extern crate caseless;
 
 use std::io::{self, BufReader};
 use std::io::prelude::*;
@@ -12,6 +14,9 @@ use csv::Reader;
 use std::cmp;
 use std::str;
 use std::process;
+use std::time::Instant;
+use unicode_normalization::UnicodeNormalization;
+use caseless::Caseless;
 
 #[derive(Debug)]
  struct Verse {
@@ -24,8 +29,7 @@ use std::process;
  #[derive(Debug)]
  struct Match<'a> {
      verse: &'a Verse,
-     matched_indexes: Vec<u16>,
-     score: u16
+     distance: u16
  }
 
 fn main() -> io::Result<()> {
@@ -44,14 +48,16 @@ fn main() -> io::Result<()> {
             .expect("Failed to read line");
 
         // 3. Remove new line char and break search into chars
-        let query = query.trim().to_lowercase();
+        let query = normalise_text(&query).trim().to_string();
 
         // 5. If no input was given exit the program
         if query.chars().count() == 0  {
             process::exit(1);
         }
 
+        let now = Instant::now();
         let matches = search(query, &verses);
+        println!("{:?}", now.elapsed());
 
         for m in matches {
             println!("{:?}\n", m);
@@ -104,69 +110,59 @@ fn load_verses() -> Result<Vec<Verse>, csv::Error> {
         };
 
         verses.push(
-            Verse { book, chapter, verse, text: text.to_string().to_lowercase().trim().to_string() }
+            Verse { 
+                book,
+                chapter,
+                verse,
+                text: normalise_text(text).trim().to_string()
+            }
         );
     }
 
     Ok(verses)
 }
 
-fn search<'a>(search: String, verses: &'a Vec<Verse>) -> Vec<Match> {
+fn search<'a>(search: String, verses: &'a Vec<Verse>) -> Vec<Match<'a>> {
     let mut matches: Vec<Match> = Vec::new();
 
     // 6. loop through each verse and find best matches
     'outer: for verse in verses {
-        let mut matched_indexes: Vec<u16> = Vec::new();
-        let mut verse_chars = verse.text.chars().enumerate();
-
+        let mut verse_chars = verse.text.chars();
+        let mut distance: u16 = 0;
         for search_char in search.chars() {
-            match verse_chars.find(|(i, verse_ch)| *verse_ch == search_char) {
-                Some((i, verse_ch)) => matched_indexes.push(i as u16),
+            let index = match verse_chars.position(|verse_ch| verse_ch == search_char) {
+                Some(index) => index as u16,
                 None => continue 'outer
-            }
-        }
+            };
 
-        let score: u16 = match score(&matched_indexes) {
-            Ok(score) => score,
-            Err(e) => continue
-        };
+            distance = index + distance;
+        }
 
         // Only store the match a better match than the current worst match
         if let Some(lower_bound_match) = matches.last() {
-            if (lower_bound_match.score < score) {
+            if (lower_bound_match.distance < distance) {
                 continue;
             }
         }
         
         matches.push(Match { 
             verse: &verse,
-            score,
-            matched_indexes
+            distance
         });
 
         matches = top_matches(matches, 10);
     }
 
-    top_matches(matches, 10)
+    matches
 }
 
 fn top_matches(mut matches: Vec<Match>, limit: u8) -> Vec<Match> {
-    matches.sort_unstable_by(|a, b| a.score.partial_cmp(&b.score).unwrap());
+    matches.sort_unstable_by(|a, b| a.distance.partial_cmp(&b.distance).unwrap());
     matches.truncate(limit as usize);
 
     matches
 }
 
-fn score(matched_indexes: &Vec<u16>) -> Result<u16, &'static str> {
-    let first_index = match matched_indexes.first() {
-        Some(index) => index,
-        None => return Err("must contain at least one index")
-    };
-
-    let last_index = match matched_indexes.last() {
-        Some(index) => index,
-        None => return Err("must contain at least one index")
-    };
-
-    Ok(last_index - first_index)
+fn normalise_text(text: &str) -> String {
+    caseless::default_case_fold_str(text).nfc().collect()
 }
