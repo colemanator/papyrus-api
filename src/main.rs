@@ -11,6 +11,7 @@ use std::error::Error;
 use std::env;
 use std::vec::Vec;
 use csv::Reader;
+use csv::StringRecord;
 use std::cmp;
 use std::str;
 use std::process;
@@ -23,7 +24,8 @@ use caseless::Caseless;
     book: u8,
     chapter: u8,
     verse: u8,
-    text: String
+    read_text: &[char],
+    search_text: &[char]
  }
 
  #[derive(Debug)]
@@ -32,12 +34,25 @@ use caseless::Caseless;
      distance: u16
  }
 
-fn main() -> io::Result<()> {
-    let verses = match load_verses() {
-        Ok(verses) => verses,
-        Err(_) => process::exit(1)
-    };
+#[derive(Debug)]
+struct Bible {
+    read_chars: Vec<char>,
+    search_chars: Vec<char>,
+    verse_selects: Vec<VerseRef>
+}
 
+#[derive(Debug)]
+struct VerseSelect {
+    read_position: u32,
+    read_length: u16,
+    search_position: u32,
+    search_length: u16,
+    verse: u8,
+    chapter: u8,
+    book: u8
+}
+
+fn main() -> io::Result<()> {
     loop {
         // 1. Ask for each string
         println!("\nSearch verses: ");
@@ -63,63 +78,6 @@ fn main() -> io::Result<()> {
             println!("{:?}\n", m);
         }
     }
-}
-
-fn load_verses() -> Result<Vec<Verse>, csv::Error> {
-    let mut rdr = Reader::from_path("src/data/t_asv.csv")?;
-    let headers = rdr.headers()?.clone();
-
-    let mut verses = Vec::new();
-
-    for result in rdr.records() {
-        let record = result?;
-
-        let book: &str = match record.get(1) {
-            Some(x) => x,
-            None => continue
-        };
-
-        let book: u8 = match book.trim().parse() {
-            Ok(num) => num,
-            Err(_) => continue,
-        };
-
-        let chapter: &str = match record.get(2) {
-            Some(x) => x,
-            None => continue
-        };
-
-        let chapter: u8 = match chapter.trim().parse() {
-            Ok(num) => num,
-            Err(_) => continue,
-        };
-
-        let verse: &str = match record.get(3) {
-            Some(x) => x,
-            None => continue
-        };
-
-        let verse: u8 = match verse.trim().parse() {
-            Ok(num) => num,
-            Err(_) => continue,
-        };
-
-        let text: &str = match record.get(4) {
-            Some(x) => x,
-            None => continue
-        };
-
-        verses.push(
-            Verse { 
-                book,
-                chapter,
-                verse,
-                text: normalise_text(text).trim().to_string()
-            }
-        );
-    }
-
-    Ok(verses)
 }
 
 fn search<'a>(search: String, verses: &'a Vec<Verse>) -> Vec<Match<'a>> {
@@ -165,4 +123,76 @@ fn top_matches(mut matches: Vec<Match>, limit: u8) -> Vec<Match> {
 
 fn normalise_text(text: &str) -> String {
     caseless::default_case_fold_str(text).nfc().collect()
+}
+
+fn load_bible() {
+    let mut rdr = Reader::from_path("src/data/t_asv.csv")?;
+    let headers = rdr.headers()?.clone();
+
+    let mut bible = Bible{
+        search_text: Vec::new(),
+        read_text: Vec::new(),
+        verse_refs: Vec::new()
+    }
+
+    let mut read_text_index = bible.read_text.len();
+    let mut search_text_index = bible.search_text.len();
+
+    for result in rdr.records() {
+        let record = result?;
+
+        // Get each property of the record
+        let book = as_int(record, 1);
+        let chapter = as_int(record, 2);
+        let verse = as_int(record, 3);
+        let text = as_text(record, 4);
+        let search_text = normalise_text(text);
+
+        // Adding chars to the vectors
+        bible.read_text.extend(text);
+        bible.search_text.extend(search_text);
+
+        // Make a ref for this verse
+        bible.verse_refs.push(VerseRef{
+            read_position: read_text_index,
+            read_length: text.len(),
+            search_position: search_text_index,
+            search_length: search_text.len(),
+            book,
+            chapter,
+            verse
+        });
+    }
+
+    bible
+}
+
+fn as_int(Result<StringRecord, Error>, index: u8) -> u8 {
+    match record.get(index) {
+        Some(st) => st.trim().parse()?,
+        None => Error
+    }
+}
+
+fn as_string(Result<StringRecord, Error>, index: u8) -> String {
+    match record.get(index) {
+        Some(text) => text,
+        None => Error
+    }
+}
+
+fn get_verses(bible: Bible) -> Vec<Verse> {
+    let mut verses = Vec::new();
+
+    for verse_select in bible.verse_selects {
+        verses.push(Verse{
+            read_text: &[verse_select.read_position..verse_select.read_length + verse_select.read_position],
+            search_text: &[verse_select.search_position..verse_select.search_position + verse_select.search_length],
+            book: verse_select.book,
+            chapter: verse_select.chapter,
+            verse: verse_select.verse
+        });
+    }
+
+    verses
 }
