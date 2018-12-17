@@ -7,11 +7,11 @@ use std::io::{self, BufReader};
 use std::io::prelude::*;
 use std::fs::File;
 use std::path::Path;
-use std::error::Error;
 use std::env;
 use std::vec::Vec;
 use csv::Reader;
 use csv::StringRecord;
+use csv::Error;
 use std::cmp;
 use std::str;
 use std::process;
@@ -20,17 +20,17 @@ use unicode_normalization::UnicodeNormalization;
 use caseless::Caseless;
 
 #[derive(Debug)]
- struct Verse {
+ struct Verse<'a> {
     book: u8,
     chapter: u8,
     verse: u8,
-    read_text: &[char],
-    search_text: &[char]
+    read_text: &'a[char],
+    search_text: &'a[char]
  }
 
  #[derive(Debug)]
  struct Match<'a> {
-     verse: &'a Verse,
+     verse: &'a Verse<'a>,
      distance: u16
  }
 
@@ -38,7 +38,7 @@ use caseless::Caseless;
 struct Bible {
     read_chars: Vec<char>,
     search_chars: Vec<char>,
-    verse_selects: Vec<VerseRef>
+    verse_selects: Vec<VerseSelect>
 }
 
 #[derive(Debug)]
@@ -53,6 +53,14 @@ struct VerseSelect {
 }
 
 fn main() -> io::Result<()> {
+
+    let bible = match load_bible() {
+        Ok(bible) => bible,
+        Err(_) => process::exit(1)
+    };
+
+    let verses = get_verses(&bible);
+
     loop {
         // 1. Ask for each string
         println!("\nSearch verses: ");
@@ -85,10 +93,10 @@ fn search<'a>(search: String, verses: &'a Vec<Verse>) -> Vec<Match<'a>> {
 
     // 6. loop through each verse and find best matches
     'outer: for verse in verses {
-        let mut verse_chars = verse.text.chars();
+        let mut verse_chars = verse.search_text.iter();
         let mut distance: u16 = 0;
         for search_char in search.chars() {
-            let index = match verse_chars.position(|verse_ch| verse_ch == search_char) {
+            let index = match verse_chars.position(|verse_ch| *verse_ch == search_char) {
                 Some(index) => index as u16,
                 None => continue 'outer
             };
@@ -125,18 +133,18 @@ fn normalise_text(text: &str) -> String {
     caseless::default_case_fold_str(text).nfc().collect()
 }
 
-fn load_bible() {
+fn load_bible() -> Result<Bible, Error>{
     let mut rdr = Reader::from_path("src/data/t_asv.csv")?;
     let headers = rdr.headers()?.clone();
 
     let mut bible = Bible{
-        search_text: Vec::new(),
-        read_text: Vec::new(),
-        verse_refs: Vec::new()
-    }
+        search_chars: Vec::new(),
+        read_chars: Vec::new(),
+        verse_selects: Vec::new()
+    };
 
-    let mut read_text_index = bible.read_text.len();
-    let mut search_text_index = bible.search_text.len();
+    let mut read_text_index = bible.read_chars.len();
+    let mut search_text_index = bible.search_chars.len();
 
     for result in rdr.records() {
         let record = result?;
@@ -145,49 +153,56 @@ fn load_bible() {
         let book = as_int(record, 1);
         let chapter = as_int(record, 2);
         let verse = as_int(record, 3);
-        let text = as_text(record, 4);
-        let search_text = normalise_text(text);
+        let text = as_string(record, 4);
+        let search_text = normalise_text(&text.to_string());
 
         // Adding chars to the vectors
-        bible.read_text.extend(text);
-        bible.search_text.extend(search_text);
+        bible.read_chars.extend(text.chars());
+        bible.search_chars.extend(search_text.chars());
 
         // Make a ref for this verse
-        bible.verse_refs.push(VerseRef{
-            read_position: read_text_index,
-            read_length: text.len(),
-            search_position: search_text_index,
-            search_length: search_text.len(),
+        bible.verse_selects.push(VerseSelect{
+            read_position: read_text_index as u32,
+            read_length: text.len() as u16,
+            search_position: search_text_index as u32,
+            search_length: search_text.len() as u16,
             book,
             chapter,
             verse
         });
     }
 
-    bible
+    Ok(bible)
 }
 
-fn as_int(Result<StringRecord, Error>, index: u8) -> u8 {
+fn as_int(record: StringRecord, index: usize) -> u8 {
     match record.get(index) {
-        Some(st) => st.trim().parse()?,
-        None => Error
+        Some(st) => {
+            match st.trim().parse() {
+                Ok(integer) => integer,
+                Err(_) => process::exit(1)
+            }
+        }
+        None => process::exit(1)
     }
 }
 
-fn as_string(Result<StringRecord, Error>, index: u8) -> String {
-    match record.get(index) {
+fn as_string(record: StringRecord, index: usize) -> String {
+    let text = match record.get(index) {
         Some(text) => text,
-        None => Error
-    }
+        None => process::exit(1)
+    };
+
+    text.to_string()
 }
 
-fn get_verses(bible: Bible) -> Vec<Verse> {
+fn get_verses<'a>(bible: &'a Bible) -> Vec<Verse<'a>> {
     let mut verses = Vec::new();
 
     for verse_select in bible.verse_selects {
         verses.push(Verse{
-            read_text: &[verse_select.read_position..verse_select.read_length + verse_select.read_position],
-            search_text: &[verse_select.search_position..verse_select.search_position + verse_select.search_length],
+            read_text: &bible.read_chars[verse_select.read_position as usize..(verse_select.read_position + verse_select.read_length as u32) as usize],
+            search_text: &bible.search_chars[verse_select.search_position as usize..(verse_select.search_position + verse_select.search_length as u32) as usize],
             book: verse_select.book,
             chapter: verse_select.chapter,
             verse: verse_select.verse
