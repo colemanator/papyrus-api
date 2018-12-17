@@ -150,10 +150,10 @@ fn load_bible() -> Result<Bible, Error>{
         let record = result?;
 
         // Get each property of the record
-        let book = as_int(record, 1);
-        let chapter = as_int(record, 2);
-        let verse = as_int(record, 3);
-        let text = as_string(record, 4);
+        let book = as_int(&record, 1);
+        let chapter = as_int(&record, 2);
+        let verse = as_int(&record, 3);
+        let text = as_string(&record, 4);
         let search_text = normalise_text(&text.to_string());
 
         // Adding chars to the vectors
@@ -175,7 +175,7 @@ fn load_bible() -> Result<Bible, Error>{
     Ok(bible)
 }
 
-fn as_int(record: StringRecord, index: usize) -> u8 {
+fn as_int(record: &StringRecord, index: usize) -> u8 {
     match record.get(index) {
         Some(st) => {
             match st.trim().parse() {
@@ -187,7 +187,7 @@ fn as_int(record: StringRecord, index: usize) -> u8 {
     }
 }
 
-fn as_string(record: StringRecord, index: usize) -> String {
+fn as_string(record: &StringRecord, index: usize) -> String {
     let text = match record.get(index) {
         Some(text) => text,
         None => process::exit(1)
@@ -199,7 +199,7 @@ fn as_string(record: StringRecord, index: usize) -> String {
 fn get_verses<'a>(bible: &'a Bible) -> Vec<Verse<'a>> {
     let mut verses = Vec::new();
 
-    for verse_select in bible.verse_selects {
+    for verse_select in bible.verse_selects.iter() {
         verses.push(Verse{
             read_text: &bible.read_chars[verse_select.read_position as usize..(verse_select.read_position + verse_select.read_length as u32) as usize],
             search_text: &bible.search_chars[verse_select.search_position as usize..(verse_select.search_position + verse_select.search_length as u32) as usize],
