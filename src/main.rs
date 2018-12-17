@@ -170,6 +170,9 @@ fn load_bible() -> Result<Bible, Error>{
             chapter,
             verse
         });
+
+        read_text_index = bible.read_chars.len();
+        search_text_index = bible.search_chars.len();
     }
 
     Ok(bible)
