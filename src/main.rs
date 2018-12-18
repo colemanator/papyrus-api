@@ -94,8 +94,18 @@ fn search<'a>(search: String, verses: &'a Vec<Verse>) -> Vec<Match<'a>> {
     // 6. loop through each verse and find best matches
     'outer: for verse in verses {
         let mut verse_chars = verse.search_text.iter();
+        let mut search_chars = search.chars();
+
+        // We want to find the first char that matches and count distance from there
+        if let Some(search_char) = search_chars.next() {
+            match verse_chars.position(|verse_ch| *verse_ch == search_char) {
+                Some(_) => {},
+                None => continue 'outer
+            }
+        }
+
         let mut distance: u16 = 0;
-        for search_char in search.chars() {
+        for search_char in search_chars {
             let index = match verse_chars.position(|verse_ch| *verse_ch == search_char) {
                 Some(index) => index as u16,
                 None => continue 'outer
