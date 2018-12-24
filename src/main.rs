@@ -3,30 +3,19 @@ extern crate csv;
 extern crate unicode_normalization;
 extern crate caseless;
 
-use std::io::{self, BufReader};
-use std::io::prelude::*;
-use std::fs::File;
-use std::path::Path;
+mod bible;
+mod normalise;
+
 use std::env;
 use std::vec::Vec;
-use csv::Reader;
-use csv::StringRecord;
-use csv::Error;
 use std::cmp;
 use std::str;
 use std::process;
 use std::time::Instant;
-use unicode_normalization::UnicodeNormalization;
-use caseless::Caseless;
-
-#[derive(Debug)]
- struct Verse<'a> {
-    book: u8,
-    chapter: u8,
-    verse: u8,
-    read_text: &'a[char],
-    search_text: &'a[char]
- }
+use bible::Bible;
+use bible::Verse;
+use normalise::normalise_text;
+use std::io;
 
  #[derive(Debug)]
  struct Match<'a> {
@@ -34,32 +23,15 @@ use caseless::Caseless;
      distance: u16
  }
 
-#[derive(Debug)]
-struct Bible {
-    read_chars: Vec<char>,
-    search_chars: Vec<char>,
-    verse_selects: Vec<VerseSelect>
-}
-
-#[derive(Debug)]
-struct VerseSelect {
-    read_position: u32,
-    read_length: u16,
-    search_position: u32,
-    search_length: u16,
-    verse: u8,
-    chapter: u8,
-    book: u8
-}
 
 fn main() -> io::Result<()> {
 
-    let bible = match load_bible() {
+    let bible = match Bible::new("src/data/t_asv.csv") {
         Ok(bible) => bible,
-        Err(_) => process::exit(1)
+        Err(_) => {}
     };
 
-    let verses = get_verses(&bible);
+    let verses = bible.get_verses();
 
     loop {
         // 1. Ask for each string
@@ -137,90 +109,4 @@ fn top_matches(mut matches: Vec<Match>, limit: u8) -> Vec<Match> {
     matches.truncate(limit as usize);
 
     matches
-}
-
-fn normalise_text(text: &str) -> String {
-    caseless::default_case_fold_str(text).nfc().collect()
-}
-
-fn load_bible() -> Result<Bible, Error>{
-    let mut rdr = Reader::from_path("src/data/t_asv.csv")?;
-    let headers = rdr.headers()?.clone();
-
-    let mut bible = Bible{
-        search_chars: Vec::new(),
-        read_chars: Vec::new(),
-        verse_selects: Vec::new()
-    };
-
-    let mut read_text_index = bible.read_chars.len();
-    let mut search_text_index = bible.search_chars.len();
-
-    for result in rdr.records() {
-        let record = result?;
-
-        // Get each property of the record
-        let book = as_int(&record, 1);
-        let chapter = as_int(&record, 2);
-        let verse = as_int(&record, 3);
-        let text = as_string(&record, 4);
-        let search_text = normalise_text(&text.to_string());
-
-        // Adding chars to the vectors
-        bible.read_chars.extend(text.chars());
-        bible.search_chars.extend(search_text.chars());
-
-        // Make a ref for this verse
-        bible.verse_selects.push(VerseSelect{
-            read_position: read_text_index as u32,
-            read_length: text.len() as u16,
-            search_position: search_text_index as u32,
-            search_length: search_text.len() as u16,
-            book,
-            chapter,
-            verse
-        });
-
-        read_text_index = bible.read_chars.len();
-        search_text_index = bible.search_chars.len();
-    }
-
-    Ok(bible)
-}
-
-fn as_int(record: &StringRecord, index: usize) -> u8 {
-    match record.get(index) {
-        Some(st) => {
-            match st.trim().parse() {
-                Ok(integer) => integer,
-                Err(_) => process::exit(1)
-            }
-        }
-        None => process::exit(1)
-    }
-}
-
-fn as_string(record: &StringRecord, index: usize) -> String {
-    let text = match record.get(index) {
-        Some(text) => text,
-        None => process::exit(1)
-    };
-
-    text.to_string()
-}
-
-fn get_verses<'a>(bible: &'a Bible) -> Vec<Verse<'a>> {
-    let mut verses = Vec::new();
-
-    for verse_select in bible.verse_selects.iter() {
-        verses.push(Verse{
-            read_text: &bible.read_chars[verse_select.read_position as usize..(verse_select.read_position + verse_select.read_length as u32) as usize],
-            search_text: &bible.search_chars[verse_select.search_position as usize..(verse_select.search_position + verse_select.search_length as u32) as usize],
-            book: verse_select.book,
-            chapter: verse_select.chapter,
-            verse: verse_select.verse
-        });
-    }
-
-    verses
 }
