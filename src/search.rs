@@ -1,4 +1,12 @@
+use normalise::normalise_text;
+use std::vec::Vec;
+use bible::Verse;
 
+#[derive(Debug)]
+ pub struct Match<'a> {
+     verse: &'a Verse<'a>,
+     distance: u16
+ }
 
 pub fn search<'a>(query: String, verses: &'a Vec<Verse>) -> Vec<Match<'a>> {
     let mut matches: Vec<Match> = Vec::new();
@@ -8,7 +16,7 @@ pub fn search<'a>(query: String, verses: &'a Vec<Verse>) -> Vec<Match<'a>> {
 
     // loop through each verse and find best matches
     'outer: for verse in verses {
-        let mut verse_chars = verse.query_text.iter();
+        let mut verse_chars = verse.search_text.iter();
         let mut query_chars = query.chars();
 
         // We want to find the first char that matches and count distance from there
