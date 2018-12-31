@@ -1,3 +1,6 @@
+//! # Papyrus
+//! A micro-service for querying the bible using approximate string searching.
+
 #![allow(unused)]
 extern crate csv;
 extern crate unicode_normalization;
@@ -14,8 +17,6 @@ use bible::Bible;
 use normalise::normalise_text;
 use search::search;
 use std::io;
-
-
 
 fn main() -> io::Result<()> {
 

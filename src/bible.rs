@@ -1,3 +1,6 @@
+//! # Bible
+//! 
+//! This module contains the bible struct and it accompanying functions
 
 extern crate csv;
 
@@ -8,6 +11,7 @@ use csv::Error;
 use std::process;
 use std::path::Path;
 
+// Contains verses as a flat vector of chars with verse_selects which mark each verse
 #[derive(Debug)]
 pub struct Bible {
     read_chars: Vec<char>,
@@ -15,6 +19,7 @@ pub struct Bible {
     verse_selects: Vec<VerseSelect>
 }
 
+// Used by the bible struct to identify verses in a flat vector of chars
 #[derive(Debug)]
 struct VerseSelect {
     read_position: u32,
@@ -26,6 +31,7 @@ struct VerseSelect {
     book: u8
 }
 
+// Represents a bible verse
 #[derive(Debug)]
  pub struct Verse<'a> {
     pub book: u8,
@@ -36,7 +42,9 @@ struct VerseSelect {
  }
 
  impl Bible {
-     pub fn new(path: &str) -> Result<Bible, Error>{
+
+    /// Create a bible struct from a CSV
+    pub fn new(path: &str) -> Result<Bible, Error>{
         let mut rdr = Reader::from_path(path)?;
         let headers = rdr.headers()?.clone();
 
@@ -81,6 +89,7 @@ struct VerseSelect {
         Ok(bible)
     }
 
+    /// Get the verses from the bible
     pub fn get_verses<'a>(&'a self) -> Vec<Verse<'a>> {
         let mut verses = Vec::new();
 
@@ -97,6 +106,7 @@ struct VerseSelect {
         verses
     }
 
+    /// Read a record from the CSV and attempt to cast to a u8
     fn as_int(record: &StringRecord, index: usize) -> u8 {
         match record.get(index) {
             Some(st) => {
@@ -109,6 +119,7 @@ struct VerseSelect {
         }
     }
 
+    /// Read a record from a CSV as a string
     fn as_string(record: &StringRecord, index: usize) -> String {
         let text = match record.get(index) {
             Some(text) => text,
