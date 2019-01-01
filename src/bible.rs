@@ -5,9 +5,9 @@
 extern crate csv;
 
 use normalise::normalise_text;
-use csv::Reader;
-use csv::StringRecord;
-use csv::Error;
+use self::csv::Reader;
+use self::csv::StringRecord;
+use self::csv::Error;
 use std::process;
 use std::path::Path;
 

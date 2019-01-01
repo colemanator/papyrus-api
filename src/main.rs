@@ -2,19 +2,17 @@
 //! A micro-service for querying the bible using approximate string searching.
 
 #![allow(unused)]
-extern crate csv;
-extern crate unicode_normalization;
-extern crate caseless;
+extern crate iron;
+extern crate router;
 
 mod bible;
-mod normalise;
 mod search;
+mod normalise;
 
 use std::vec::Vec;
 use std::process;
 use std::time::Instant;
 use bible::Bible;
-use normalise::normalise_text;
 use search::search;
 use std::io;
 
