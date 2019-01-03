@@ -4,6 +4,7 @@
 #![allow(unused)]
 extern crate iron;
 extern crate router;
+extern crate url;
 
 mod bible;
 mod search;
@@ -15,8 +16,17 @@ use std::time::Instant;
 use bible::Bible;
 use search::search;
 use std::io;
+use iron::prelude::*;
+use iron::status;
+use router::Router;
+use url::Url;
 
 fn main() -> io::Result<()> {
+
+    let mut router = Router::new();  
+    router.get("/:bible", handler, "bible");
+
+    Iron::new(router).http("localhost:3000").unwrap();
 
     let bible = match Bible::new("src/data/t_asv.csv") {
         Ok(bible) => bible,
@@ -47,4 +57,19 @@ fn main() -> io::Result<()> {
             println!("{:?}\n", m);
         }
     }
+}
+
+fn handler(req: &mut Request) -> IronResult<Response> {
+    let url: Url = req.url.clone().into();
+        
+    let query = url
+        .query_pairs()
+        .find(|(name, value)| name == "query");
+
+    let (name, value) = match query {
+        Some(st) => st,
+        None => process::exit(1)
+    };
+
+    Ok(Response::with((status::Ok, value.to_string())))
 }
