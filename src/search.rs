@@ -10,8 +10,8 @@ use bible::Verse;
 /// Represents a match
 #[derive(Debug)]
  pub struct Match<'a> {
-     verse: &'a Verse<'a>,
-     distance: u16
+     pub verse: &'a Verse<'a>,
+     pub distance: u16
  }
 
 /// Find the top 10 matches in the given verses
