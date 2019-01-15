@@ -15,10 +15,10 @@ Make a request to `/bible?query={YOUR SEARCH}` to get back matches as `.json`.
 3. Learn about how computers actually work
 
 ## Road Map
-[x] Create working server with single translation
-[] Build a frontend
-[] Handle errors
-[] Add more translations
+- [x] Create working server with single translation
+- [] Build a frontend
+- [] Handle errors
+- [] Add more translations
 
 [instructions]: https://doc.rust-lang.org/cargo/getting-started/installation.html
 [rust]: https://www.rust-lang.org/
