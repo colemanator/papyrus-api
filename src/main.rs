@@ -34,6 +34,8 @@ use url::Url;
 use persistent::Read;
 use std::sync::Arc;
 use iron::{typemap, AfterMiddleware, BeforeMiddleware};
+use iron::headers::{AccessControlAllowOrigin, ContentType};
+use iron::mime::{Mime, TopLevel, SubLevel, Attr, Value};
 
 #[derive(Debug)]
 struct SharedVerses<'a> {
@@ -76,19 +78,19 @@ fn main() -> io::Result<()> {
     chain.link(Read::<SharedVerses>::both(shared_verses));
 
     // Start server
-    Iron::new(chain).http("localhost:3000").unwrap();
+    Iron::new(chain).http("localhost:9000").unwrap();
 
     Ok(())
 }
 
 /// Handles incoming requests to a specific route
 fn handler(req: &mut Request) -> IronResult<Response> {
+    // Get the query and search verses
     let query = get_query(req);
-
     let shared_verses = req.get::<Read<SharedVerses>>().unwrap();
-
     let matches = search(query, &shared_verses.verses);
 
+    // Convert to response structure
     let search_matches: Vec<MatchedVerse> = matches
         .iter()
         .map(|mat| MatchedVerse {
@@ -105,7 +107,17 @@ fn handler(req: &mut Request) -> IronResult<Response> {
         Err(_) => process::exit(1)
     };
 
-    Ok(Response::with((status::Ok, match_json)))
+    // Create response and set headers
+    let mut res = Response::with((status::Ok, match_json));
+    
+    res.headers.set(
+        AccessControlAllowOrigin::Value("http://localhost:3000".to_owned())
+    );
+    res.headers.set(
+        ContentType(Mime(TopLevel::Application, SubLevel::Json,vec![(Attr::Charset, Value::Utf8)]))
+    );
+
+    Ok(res)
 }
 
 /// Find and return the query param value with the name `query`
