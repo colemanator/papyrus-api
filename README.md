@@ -16,8 +16,8 @@ Make a request to `/bible?query={YOUR SEARCH}` to get back matches as `.json`.
 
 ## Road Map
 - [x] Create working server with single translation
-- [ ] Build a frontend
-- [ ] Handle errors
+- [x] Build a frontend
+- [x] Handle errors
 - [ ] Add more translations
 
 [instructions]: https://doc.rust-lang.org/cargo/getting-started/installation.html
