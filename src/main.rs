@@ -62,7 +62,7 @@ impl AfterMiddleware for Headers {
     /// Here we set the standard headers for our API
     fn after(&self, req: &mut Request, mut res: Response) -> IronResult<Response> {
         res.headers.set(
-            AccessControlAllowOrigin::Value(env::var("APP_URL").unwrap().to_owned())
+            AccessControlAllowOrigin::Value(env::var("APP_ALLOWED_ORIGIN").unwrap().to_owned())
         );
         res.headers.set(
             ContentType(Mime(TopLevel::Application, SubLevel::Json,vec![(Attr::Charset, Value::Utf8)]))
@@ -95,7 +95,7 @@ fn main() -> io::Result<()> {
 
     // Setup the endpoint
     let mut router = Router::new();  
-    router.get("/:bible", handler, "bible");
+    router.get("/:verses", handler, "verses");
 
     // Add router to middleware chain as well as shared verses
     let mut chain = Chain::new(router);
@@ -103,7 +103,7 @@ fn main() -> io::Result<()> {
     chain.link_after(Headers);
 
     // Start server
-    Iron::new(chain).http(env::var("API_URL").unwrap()).unwrap();
+    Iron::new(chain).http(env::var("APP_SOCKET_ADDRESS").unwrap()).unwrap();
 
     Ok(())
 }
