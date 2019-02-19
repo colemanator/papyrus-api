@@ -1,4 +1,4 @@
-# Papyrus
+# Papyrus API
 Blazing fast fuzzy search for the Bible.
 
 ## Requirements
