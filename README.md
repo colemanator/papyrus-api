@@ -1,5 +1,5 @@
 # Papyrus API
-Blazing fast fuzzy search for the Bible.
+Blazing fast fuzzy search for the Bible. Check it out here: http://papyrusapp.net/
 
 ## Requirements
 `rustc` & `cargo` which can be installed following these [instructions]
